@@ -17,6 +17,7 @@
 
 #include "tasks.h"
 #include <stdexcept>
+#include <string>
 
 // Déclaration des priorités des taches
 #define PRIORITY_TSERVER 30
@@ -27,6 +28,9 @@
 #define PRIORITY_TSTARTROBOT 20
 #define PRIORITY_TCAMERA 21
 #define PRIORITY_TBATTERY 18
+
+//Variables globales
+int comRobot_FailCounter = 0;
 /*
  * Some remarks:
  * 1- This program is mostly a template. It shows you how to create tasks, semaphore
@@ -432,22 +436,42 @@ void Tasks::BatteryTask(void *arg) {
     cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
     // Synchronization barrier (waiting that all tasks are starting)
     rt_sem_p(&sem_barrier, TM_INFINITE);
-    
+    rt_sem_p(&sem_startRobot, TM_INFINITE);
     /**************************************************************************************/
     /* The task starts here                                                               */
     /**************************************************************************************/
-    rt_task_set_periodic(NULL, TM_NOW, 500_000_000);
+    rt_task_set_periodic(NULL, TM_NOW, 500000000);
 
     while (1) {
         string status_batterie;
-        Message * bonjour_batterie=new Message (LABEL_ROBOT_GET_BATTERY);
+        Message * bonjour_batterie=new Message ((MessageID) MESSAGE_ROBOT_BATTERY_GET);
         Message * message_status_robot= new Message();
         rt_mutex_acquire(&mutex_robot, TM_INFINITE);
         message_status_robot = robot.Write(bonjour_batterie);
         rt_mutex_release(&mutex_robot);
-        SendToMonTask(message_status_robot);
+        if Check_ComRobot(message_status_robot) {
+           SendToMonTask(message_status_robot); 
+        }
         delete (message_status_robot);
         delete (bonjour_batterie);
     }
+}
+
+bool Tasks::Check_ComRobot(Message* message){
+    bool find=true;
+    if (message.ToString().compare("Invalid message")!=0){
+        ++comRobot_FailCounter;
+        if (comRobot_FailCounter==3){
+            Message * errorMessage = new Message(MESSAGE_ANSWER_COM_ERROR);
+            SendToMonTask(errorMessage);
+            delete (errorMessage);
+            Stop();
+            comRobot_FailCounter=0;
+        }
+        find=false;
+    }else{
+        comRobot_FailCounter=0;
+    }
+    return find;
 }
 
