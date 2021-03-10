@@ -261,7 +261,38 @@ void Tasks::ReceiveFromMonTask(void *arg) {
 
         if (msgRcv->CompareID(MESSAGE_MONITOR_LOST)) {
             delete(msgRcv);
-            exit(-1);
+            cout << "Monitor communcation lost";
+            // Stopper le mouvement du robot
+            rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+            rs = robotStarted;
+            rt_mutex_release(&mutex_robotStarted);
+            if (rs == 1) {
+                rt_mutex_acquire(&mutex_move, TM_INFINITE);
+                cpMove = move;
+                rt_mutex_release(&mutex_move);
+
+                cout << " move: " << cpMove;
+
+                rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+                robot.Stop();
+                rt_mutex_release(&mutex_robot);
+            }
+            else {
+                exit(-1);
+            }
+            cout << endl << flush;
+            // Stopper com avec robot
+            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+            status = robot.Close();
+            rt_mutex_release(&mutex_robot);
+            // Stopper com avec le serveur
+            rt_mutex_acquire(&mutex_monitor, TM_INFINITE);
+            status = monitor.Close(SERVER_PORT);
+            rt_mutex_release(&mutex_monitor);
+
+            cout << "Closing server" << " (" << status << ")" << endl;
+            // Stopper caméra
+            exit(0);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_COM_OPEN)) {
             rt_sem_v(&sem_openComRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD)) {
