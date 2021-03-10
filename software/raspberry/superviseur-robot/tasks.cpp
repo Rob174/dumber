@@ -277,7 +277,7 @@ void Tasks::ReceiveFromMonTask(void *arg) {
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_COM_OPEN)) {
             rt_sem_v(&sem_openComRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD)) {
-            rt_sem_v(&sem_startRobot);
+            rt_sem_broadcast(&sem_startRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_GO_FORWARD) ||
                 msgRcv->CompareID(MESSAGE_ROBOT_GO_BACKWARD) ||
                 msgRcv->CompareID(MESSAGE_ROBOT_GO_LEFT) ||
@@ -436,27 +436,50 @@ void Tasks::BatteryTask(void *arg) {
     cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
     // Synchronization barrier (waiting that all tasks are starting)
     rt_sem_p(&sem_barrier, TM_INFINITE);
+    cout << "battery_synchronized" << endl;
     rt_sem_p(&sem_startRobot, TM_INFINITE);
+    cout << "battery started" << endl;
     /**************************************************************************************/
     /* The task starts here                                                               */
     /**************************************************************************************/
     rt_task_set_periodic(NULL, TM_NOW, 500000000);
 
+    
+    Message * bonjour_batterie;
+    Message * message_status_robot;
+    
+    
     while (1) {
-        string status_batterie;
-        Message * bonjour_batterie=new Message ((MessageID) MESSAGE_ROBOT_BATTERY_GET);
-        Message * message_status_robot= new Message();
-        rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-        message_status_robot = robot.Write(bonjour_batterie);
-        rt_mutex_release(&mutex_robot);
-        if Check_ComRobot(message_status_robot) {
-           SendToMonTask(message_status_robot); 
+        
+        bool started = false;
+        rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+        started = (bool) robotStarted;
+        rt_mutex_release(&mutex_robotStarted);
+
+        if(started){
+            
+            rt_task_wait_period(NULL);
+            bonjour_batterie = new Message ((MessageID) MESSAGE_ROBOT_BATTERY_GET);
+
+            string status_batterie;
+
+            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+            message_status_robot = robot.Write(bonjour_batterie);
+            rt_mutex_release(&mutex_robot);
+
+            cout << "-------------" << message_status_robot << endl;
+
+
+            WriteInQueue(&q_messageToMon,message_status_robot);
         }
-        delete (message_status_robot);
-        delete (bonjour_batterie);
+        
+        
+        
+        
     }
 }
 
+/*
 bool Tasks::Check_ComRobot(Message* message){
     bool find=true;
     if (message.ToString().compare("Invalid message")!=0){
@@ -474,4 +497,4 @@ bool Tasks::Check_ComRobot(Message* message){
     }
     return find;
 }
-
+ */
