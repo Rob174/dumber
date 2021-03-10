@@ -472,23 +472,22 @@ void Tasks::BatteryTask(void *arg) {
 
             WriteInQueue(&q_messageToMon,message_status_robot);
         }
-        
-        
-        
-        
     }
 }
 
-/*
+void Tasks::Stop_ComRobot (void *arg){
+    rt_sem_p(&sem_stopRobot, TM_INFINITE);
+    robot.Close();
+} 
+
 bool Tasks::Check_ComRobot(Message* message){
     bool find=true;
     if (message.ToString().compare("Invalid message")!=0){
         ++comRobot_FailCounter;
         if (comRobot_FailCounter==3){
             Message * errorMessage = new Message(MESSAGE_ANSWER_COM_ERROR);
-            SendToMonTask(errorMessage);
-            delete (errorMessage);
-            Stop();
+            WriteInQueue(&q_messageToMon,errorMessage);
+            rt_sem_v(&sem_stopRobot, TM_INFINITE);
             comRobot_FailCounter=0;
         }
         find=false;
@@ -497,4 +496,3 @@ bool Tasks::Check_ComRobot(Message* message){
     }
     return find;
 }
- */

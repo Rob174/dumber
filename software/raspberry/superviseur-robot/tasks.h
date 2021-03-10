@@ -58,6 +58,7 @@ public:
      */
     void Join();
     
+    
 private:
     /**********************************************************************/
     /* Shared data                                                        */
@@ -77,6 +78,7 @@ private:
     RT_TASK th_startRobot;
     RT_TASK th_move;
     RT_TASK th_battery;
+    RT_TASK th_stopRobot;
     
     /**********************************************************************/
     /* Mutex                                                              */
@@ -93,6 +95,7 @@ private:
     RT_SEM sem_openComRobot;
     RT_SEM sem_serverOk;
     RT_SEM sem_startRobot;
+    RT_SEM sem_stopRobot;
 
     /**********************************************************************/
     /* Message queues                                                     */
@@ -138,6 +141,7 @@ private:
      */
     void BatteryTask(void *arg);
     
+    void StopRobot (void *arg);
     /**********************************************************************/
     /* Queue services                                                     */
     /**********************************************************************/
@@ -155,6 +159,10 @@ private:
      */
     Message *ReadInQueue(RT_QUEUE *queue);
 
+    /**********************************************************************/
+    /* Others services                                                    */
+    /**********************************************************************/
+    bool Check_ComRobot(Message* message);
 };
 
 #endif // __TASKS_H__ 
