@@ -36,6 +36,15 @@
 
 using namespace std;
 
+
+typedef enum {
+    
+    MESSAGE_SENT_TO_ROBOT,
+    MESSAGE_NOT_SENT_TO_ROBOT,
+    CONNECTION_LOST_WITH_ROBOT
+} MessageState;
+
+
 class Tasks {
 public:
     /**
@@ -87,6 +96,8 @@ private:
     RT_MUTEX mutex_robot;
     RT_MUTEX mutex_robotStarted;
     RT_MUTEX mutex_move;
+    
+    RT_MUTEX mutex_comrobot_failcounter;
 
     /**********************************************************************/
     /* Semaphores                                                         */
@@ -136,8 +147,7 @@ private:
      */
     void MoveTask(void *arg);
     
-    void Stop_ComRobot (void *arg);
-    bool Check_ComRobot(Message* message);
+    MessageState Check_ComRobot(Message* message);
     /**
      * @brief Thread handling battery level request.
      */

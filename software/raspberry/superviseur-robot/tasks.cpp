@@ -77,6 +77,10 @@ void Tasks::Init() {
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    if (err = rt_mutex_create(&mutex_comrobot_failcounter, NULL)) {
+        cerr << "Error mutex create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     cout << "Mutexes created successfully" << endl << flush;
 
     /**************************************************************************************/
@@ -432,22 +436,85 @@ Message *Tasks::ReadInQueue(RT_QUEUE *queue) {
 }
 
 
-void Tasks::Stop_ComRobot (void *arg){
-    rt_sem_p(&sem_stopRobot, TM_INFINITE);
-    robot.Close();
-} 
+const string MESSAGE_ID_STRING[] = {
+    "Empty",
+    "Log",
+    "Answer [Acknowledge]",
+    "Answer [Not Acknowledge]",
+    "Answer [Command timeout]",
+    "Answer [Command unknown]",
+    "Answer [Command error]",
+    "Answer [Communication error]",
+    "Monitor connection lost",
+    "Open serial com",
+    "Close serial com",
+    "Open camera",
+    "Close camera",
+    "Ask for arena",
+    "Arena confirmed",
+    "Arena infirmed",
+    "Compute position",
+    "Stop compute position",
+    "Position",
+    "Image",
+    "Robot ping",
+    "Robot reset",
+    "Robot start with watchdog",
+    "Robot start without watchdog",
+    "Robot reload watchdog",
+    "Robot move",
+    "Robot turn",
+    "Robot go forward",
+    "Robot go backward",
+    "Robot go left",
+    "Robot go right",
+    "Robot stop",
+    "Robot poweroff",
+    "Robot get battery",
+    "Robot battery level",
+    "Robot get state",
+    "Robot current state",
+    "Robot state [Not busy]",
+    "Robot state [Busy]"
+};
 
-bool Tasks::Check_ComRobot(Message* message){
-    bool find=true;
+
+
+MessageState Tasks::Check_ComRobot(Message* message){
+    MessageState find = MESSAGE_SENT_TO_ROBOT;
+    cout << "11111111111111111111111111111" << endl<<flush;
+    cout << MESSAGE_ID_STRING[message->GetID()] << endl;
     if (message->CompareID(MESSAGE_ANSWER_ROBOT_TIMEOUT)){
+        cout << "HELLO LES AMIS" << endl<<flush;
         ++comRobot_FailCounter;
+        
+        find=MESSAGE_NOT_SENT_TO_ROBOT;
         if (comRobot_FailCounter==3){
-            Message * errorMessage = new Message(MESSAGE_MONITOR_LOST);
+            Message * errorMessage = new Message(MESSAGE_ANSWER_COM_ERROR);
             WriteInQueue(&q_messageToMon,errorMessage);
-            rt_sem_v(&sem_stopRobot);
+            
+            // Closing communication with the robot
+            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+            cout << "DAZJIOOOOOOOOOOOOOOOOOOOZ"<< endl<<flush;
+            robot.Close();
+            rt_mutex_release(&mutex_robot);    
+            
+            // Setting failcounter global variable to 0
+            rt_mutex_acquire(&mutex_comrobot_failcounter, TM_INFINITE);
+            cout << "DAZJIOOOOOZ"<< endl <<flush;
             comRobot_FailCounter=0;
+            rt_mutex_release(&mutex_comrobot_failcounter);  
+            
+            // Setting robotStarted global variable to 0.
+            rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+            cout << "DAZJIOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOZ"<< endl << flush;
+            robotStarted = 0;
+            rt_mutex_release(&mutex_robotStarted);
+            
+            find = CONNECTION_LOST_WITH_ROBOT;
+            
         }
-        find=false;
+        
     }else{
         comRobot_FailCounter=0;
     }
@@ -457,47 +524,59 @@ bool Tasks::Check_ComRobot(Message* message){
  * @brief Thread handling control of the robot.
  */
 void Tasks::BatteryTask(void *arg) {
-    int rs;
-
-    cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
-    // Synchronization barrier (waiting that all tasks are starting)
-    rt_sem_p(&sem_barrier, TM_INFINITE);
-    cout << "battery_synchronized" << endl;
-    rt_sem_p(&sem_startRobot, TM_INFINITE);
-    cout << "battery started" << endl;
-    /**************************************************************************************/
-    /* The task starts here                                                               */
-    /**************************************************************************************/
-    rt_task_set_periodic(NULL, TM_NOW, 500000000);
-
     
-    Message * bonjour_batterie;
-    Message * message_status_robot;
-    
-    
-    while (1) {
-        
-        bool started = false;
-        rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
-        started = (bool) robotStarted;
-        rt_mutex_release(&mutex_robotStarted);
+    while(1){
+        int rs;
 
-        if(started){
-            
-            rt_task_wait_period(NULL);
-            bonjour_batterie = new Message ((MessageID) MESSAGE_ROBOT_BATTERY_GET);
+        cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
+        // Synchronization barrier (waiting that all tasks are starting)
+        rt_sem_p(&sem_barrier, TM_INFINITE);
+        cout << "battery_synchronized" << endl;
 
-            string status_batterie;
+        rt_sem_p(&sem_startRobot, TM_INFINITE);
+            cout << "battery started" << endl;
 
-            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-            message_status_robot = robot.Write(bonjour_batterie);
-            Check_ComRobot(bonjour_batterie);
-            rt_mutex_release(&mutex_robot);
-
-            cout << "-------------" << message_status_robot << endl;
+        /**************************************************************************************/
+        /* The task starts here                                                               */
+        /**************************************************************************************/
+        rt_task_set_periodic(NULL, TM_NOW, 500000000);
 
 
-            WriteInQueue(&q_messageToMon,message_status_robot);
+        Message * bonjour_batterie;
+        Message * message_status_robot;
+
+        MessageState checked_sent_message;
+
+        while (1) {
+
+            // Instruction moved inside while to be able restarting program without lauching task again
+
+
+            bool started = false;
+
+            rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+            started = (bool) robotStarted;
+            rt_mutex_release(&mutex_robotStarted);
+
+            if(started){
+
+                rt_task_wait_period(NULL);
+                bonjour_batterie = new Message ((MessageID) MESSAGE_ROBOT_BATTERY_GET);
+
+                string status_batterie;
+
+                rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+                message_status_robot = robot.Write(bonjour_batterie);
+                checked_sent_message = Check_ComRobot(message_status_robot);
+                rt_mutex_release(&mutex_robot);
+
+                cout << "-------------" << message_status_robot->ToString() << endl<<flush;
+
+                    
+                if(checked_sent_message == MESSAGE_SENT_TO_ROBOT){
+                    WriteInQueue(&q_messageToMon,message_status_robot);
+                } else if(checked_sent_message == CONNECTION_LOST_WITH_ROBOT) break;
+            }
         }
     }
 }
