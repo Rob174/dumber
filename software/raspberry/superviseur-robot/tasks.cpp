@@ -496,7 +496,7 @@ MessageState Tasks::Check_ComRobot(Message* message){
             // Closing communication with the robot
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             cout << "DAZJIOOOOOOOOOOOOOOOOOOOZ"<< endl<<flush;
-            robot.Close();
+            robot.Reset();
             rt_mutex_release(&mutex_robot);    
             
             // Setting failcounter global variable to 0
