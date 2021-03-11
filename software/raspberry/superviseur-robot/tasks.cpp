@@ -398,8 +398,8 @@ void Tasks::ReloadWD(void *arg) {
     
     rt_task_set_periodic(NULL, TM_NOW, 1 000 000 000);
     while(1){
-        rt_sem_p(&sem_reloadWD, TM_INFINITE);
         rt_task_wait_period(NULL);
+        rt_sem_p(&sem_reloadWD, TM_INFINITE);
         cout << "Periodic update WD";
         rt_mutex_acquire(&mutex_robot, TM_INFINITE);
         msgSend = robot.Write(new Message((MessageID)MESSAGE_ROBOT_RELOAD_WD));
@@ -419,6 +419,7 @@ void Tasks::ReloadWD(void *arg) {
                 rt_mutex_release(&mutex_robot);
                 // Stopper com avec robot
                 rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+                status = robot.Reset();
                 status = robot.Close();
                 rt_mutex_release(&mutex_robot);
             }
