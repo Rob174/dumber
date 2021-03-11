@@ -73,7 +73,15 @@ void Tasks::Init() {
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
-    if (err = rt_mutex_create(&mutex_CompteurWD, NULL)) {
+    if (err = rt_mutex_create(&mutex_compteurWD, NULL)) {
+        cerr << "Error mutex create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_mutex_create(&mutex_modeWD, NULL)) {
+        cerr << "Error mutex create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_mutex_create(&mutex_reloadWD, NULL)) {
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -98,7 +106,7 @@ void Tasks::Init() {
         cerr << "Error semaphore create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
-    if (err = rt_sem_create(&sem_modeWD, NULL, 0, S_FIFO)) {
+    if (err = rt_sem_create(&sem_reloadWD, NULL, 0, S_FIFO)) {
         cerr << "Error semaphore create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -281,10 +289,14 @@ void Tasks::ReceiveFromMonTask(void *arg) {
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_COM_OPEN)) {
             rt_sem_v(&sem_openComRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD)) {
+            rt_mutex_acquire(&mutex_modeWD, TM_INFINITE);
             modeRobot = MESSAGE_ROBOT_START_WITHOUT_WD;
+            rt_mutex_release(&mutex_modeWD);
             rt_sem_v(&sem_startRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITH_WD)) {
+            rt_mutex_acquire(&mutex_modeWD, TM_INFINITE);
             modeRobot = MESSAGE_ROBOT_START_WITH_WD;
+            rt_mutex_release(&mutex_modeWD);
             rt_sem_v(&sem_startRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_GO_FORWARD) ||
                 msgRcv->CompareID(MESSAGE_ROBOT_GO_BACKWARD) ||
@@ -344,7 +356,13 @@ void Tasks::StartRobotTask(void *arg) {
     /**************************************************************************************/
     /* The task startRobot starts here                                                    */
     /**************************************************************************************/
-    if(modeRobot == 23) {
+    rt_mutex_acquire(&mutex_modeWD, TM_INFINITE);
+        
+    if(modeRobot == 22) {
+        
+      
+        rt_mutex_release(&mutex_modeWD);
+        
         Message * msgSend;
         while (1) {
 
@@ -367,6 +385,10 @@ void Tasks::StartRobotTask(void *arg) {
         }
     }
     else if (modeRobot == 23) {
+        
+  
+        rt_mutex_release(&mutex_modeWD);
+        
         Message * msgSend;
         while (1) {
 
@@ -381,13 +403,13 @@ void Tasks::StartRobotTask(void *arg) {
                 robotStarted = 1;
                 rt_mutex_release(&mutex_robotStarted);
                 
-                rt_mutex_acquire(&mutex_CompteurWD, TM_INFINITE);
+                rt_mutex_acquire(&mutex_compteurWD, TM_INFINITE);
                 compteurWD = 0;
-                rt_mutex_release(&mutex_CompteurWD);
+                rt_mutex_release(&mutex_compteurWD);
                 rt_sem_v(&sem_reloadWD);
             }
-        }
-    }
+        } 
+    } else rt_mutex_release(&mutex_modeWD);
 }
 
 void Tasks::ReloadWD(void *arg) {
@@ -396,7 +418,7 @@ void Tasks::ReloadWD(void *arg) {
     rt_sem_p(&sem_barrier, TM_INFINITE);
     Message * msgSend;
     
-    rt_task_set_periodic(NULL, TM_NOW, 1 000 000 000);
+    rt_task_set_periodic(NULL, TM_NOW, 1000000000);
     while(1){
         rt_task_wait_period(NULL);
         rt_sem_p(&sem_reloadWD, TM_INFINITE);
@@ -405,12 +427,12 @@ void Tasks::ReloadWD(void *arg) {
         msgSend = robot.Write(new Message((MessageID)MESSAGE_ROBOT_RELOAD_WD));
         rt_mutex_release(&mutex_robot);
         if(msgSend->GetID() == MESSAGE_ANSWER_ACK){
-            rt_mutex_acquire(&mutex_CompteurWD, TM_INFINITE);
+            rt_mutex_acquire(&mutex_compteurWD, TM_INFINITE);
             compteurWD--;
-            rt_mutex_release(&mutex_CompteurWD);
+            rt_mutex_release(&mutex_compteurWD);
         }
         else if(msgSend->GetID() == MESSAGE_ANSWER_NACK) {
-            rt_mutex_acquire(&mutex_CompteurWD, TM_INFINITE);
+            rt_mutex_acquire(&mutex_compteurWD, TM_INFINITE);
             compteurWD++;
             if (compteurWD == 3) {
                 // Par précaution on arrête le robot
@@ -419,11 +441,11 @@ void Tasks::ReloadWD(void *arg) {
                 rt_mutex_release(&mutex_robot);
                 // Stopper com avec robot
                 rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-                status = robot.Reset();
-                status = robot.Close();
+                robot.Reset();
+                robot.Close();
                 rt_mutex_release(&mutex_robot);
             }
-            rt_mutex_release(&mutex_CompteurWD);
+            rt_mutex_release(&mutex_compteurWD);
         }
     }
 }
@@ -441,7 +463,7 @@ void Tasks::MoveTask(void *arg) {
     /**************************************************************************************/
     /* The task starts here                                                               */
     /**************************************************************************************/
-    rt_task_set_periodic(NULL, TM_NOW, 500 000 000);
+    rt_task_set_periodic(NULL, TM_NOW, 500000000);
 
     while (1) {
         rt_task_wait_period(NULL);

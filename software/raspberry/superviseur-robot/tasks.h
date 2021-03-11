@@ -77,8 +77,9 @@ private:
     RT_TASK th_receiveFromMon;
     RT_TASK th_openComRobot;
     RT_TASK th_startRobot;
-    RT_TASK th_reloadWD;
     RT_TASK th_move;
+    
+    RT_TASK th_reloadWD;
     
     /**********************************************************************/
     /* Mutex                                                              */
@@ -86,8 +87,11 @@ private:
     RT_MUTEX mutex_monitor;
     RT_MUTEX mutex_robot;
     RT_MUTEX mutex_robotStarted;
-    RT_MUTEX mutex_reloadWD;
     RT_MUTEX mutex_move;
+    
+    RT_MUTEX mutex_reloadWD;
+    RT_MUTEX mutex_modeWD;
+    RT_MUTEX mutex_compteurWD;
 
     /**********************************************************************/
     /* Semaphores                                                         */
@@ -96,6 +100,7 @@ private:
     RT_SEM sem_openComRobot;
     RT_SEM sem_serverOk;
     RT_SEM sem_startRobot;
+    
     RT_SEM sem_reloadWD;
     /**********************************************************************/
     /* Message queues                                                     */
