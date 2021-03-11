@@ -98,6 +98,10 @@ void Tasks::Init() {
         cerr << "Error semaphore create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    if (err = rt_sem_create(&sem_stopRobot, NULL, 0, S_FIFO)) {
+        cerr << "Error semaphore create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     cout << "Semaphores created successfully" << endl << flush;
 
     /**************************************************************************************/
@@ -427,6 +431,28 @@ Message *Tasks::ReadInQueue(RT_QUEUE *queue) {
     return msg;
 }
 
+
+void Tasks::Stop_ComRobot (void *arg){
+    rt_sem_p(&sem_stopRobot, TM_INFINITE);
+    robot.Close();
+} 
+
+bool Tasks::Check_ComRobot(Message* message){
+    bool find=true;
+    if (message->CompareID(MESSAGE_ANSWER_ROBOT_TIMEOUT)){
+        ++comRobot_FailCounter;
+        if (comRobot_FailCounter==3){
+            Message * errorMessage = new Message(MESSAGE_MONITOR_LOST);
+            WriteInQueue(&q_messageToMon,errorMessage);
+            rt_sem_v(&sem_stopRobot);
+            comRobot_FailCounter=0;
+        }
+        find=false;
+    }else{
+        comRobot_FailCounter=0;
+    }
+    return find;
+}
 /**
  * @brief Thread handling control of the robot.
  */
@@ -465,6 +491,7 @@ void Tasks::BatteryTask(void *arg) {
 
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             message_status_robot = robot.Write(bonjour_batterie);
+            Check_ComRobot(bonjour_batterie);
             rt_mutex_release(&mutex_robot);
 
             cout << "-------------" << message_status_robot << endl;
@@ -473,26 +500,4 @@ void Tasks::BatteryTask(void *arg) {
             WriteInQueue(&q_messageToMon,message_status_robot);
         }
     }
-}
-
-void Tasks::Stop_ComRobot (void *arg){
-    rt_sem_p(&sem_stopRobot, TM_INFINITE);
-    robot.Close();
-} 
-
-bool Tasks::Check_ComRobot(Message* message){
-    bool find=true;
-    if (message.ToString().compare("Invalid message")!=0){
-        ++comRobot_FailCounter;
-        if (comRobot_FailCounter==3){
-            Message * errorMessage = new Message(MESSAGE_ANSWER_COM_ERROR);
-            WriteInQueue(&q_messageToMon,errorMessage);
-            rt_sem_v(&sem_stopRobot, TM_INFINITE);
-            comRobot_FailCounter=0;
-        }
-        find=false;
-    }else{
-        comRobot_FailCounter=0;
-    }
-    return find;
 }

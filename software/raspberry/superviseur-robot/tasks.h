@@ -135,7 +135,9 @@ private:
      * @brief Thread handling control of the robot.
      */
     void MoveTask(void *arg);
-
+    
+    void Stop_ComRobot (void *arg);
+    bool Check_ComRobot(Message* message);
     /**
      * @brief Thread handling battery level request.
      */
@@ -159,10 +161,6 @@ private:
      */
     Message *ReadInQueue(RT_QUEUE *queue);
 
-    /**********************************************************************/
-    /* Others services                                                    */
-    /**********************************************************************/
-    bool Check_ComRobot(Message* message);
 };
 
 #endif // __TASKS_H__ 
