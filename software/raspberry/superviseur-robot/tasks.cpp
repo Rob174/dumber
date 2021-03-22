@@ -412,7 +412,7 @@ void Tasks::ReloadWD(void *arg) {
     // Synchronization barrier (waiting that all tasks are starting)
     rt_sem_p(&sem_barrier, TM_INFINITE);
     Message * msgSend;
-    /*
+    
     rt_task_set_periodic(NULL, TM_NOW, 1000000000);
     while(1){
         rt_task_wait_period(NULL);
@@ -445,7 +445,7 @@ void Tasks::ReloadWD(void *arg) {
             }
             rt_mutex_release(&mutex_compteurWD);
         }
-    }*/
+    }
 }
 /**
  * @brief Thread handling control of the robot.
