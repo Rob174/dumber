@@ -361,7 +361,7 @@ void Tasks::StartRobotTask(void *arg) {
     if(modeRobot == 22) {
         
       
-        rt_mutex_release(&mutex_modeWD);
+        //rt_mutex_release(&mutex_modeWD);
         
         Message * msgSend;
         while (1) {
@@ -393,7 +393,7 @@ void Tasks::StartRobotTask(void *arg) {
         while (1) {
 
             rt_sem_p(&sem_startRobot, TM_INFINITE);
-            cout << "Start robot without watchdog (";
+            cout << "Start robot with watchdog (";
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             msgSend = robot.Write(robot.StartWithWD());
             rt_mutex_release(&mutex_robot);
@@ -429,11 +429,13 @@ void Tasks::ReloadWD(void *arg) {
         if(msgSend->GetID() == MESSAGE_ANSWER_ACK){
             rt_mutex_acquire(&mutex_compteurWD, TM_INFINITE);
             compteurWD--;
+            cout << "compterWD is " << compteurWD << endl << flush;
             rt_mutex_release(&mutex_compteurWD);
         }
         else if(msgSend->GetID() == MESSAGE_ANSWER_NACK) {
             rt_mutex_acquire(&mutex_compteurWD, TM_INFINITE);
             compteurWD++;
+            cout << "compterWD is " << compteurWD << endl << flush;
             if (compteurWD == 3) {
                 // Par précaution on arrête le robot
                 rt_mutex_acquire(&mutex_robot, TM_INFINITE);
@@ -463,7 +465,7 @@ void Tasks::MoveTask(void *arg) {
     /**************************************************************************************/
     /* The task starts here                                                               */
     /**************************************************************************************/
-    rt_task_set_periodic(NULL, TM_NOW, 500000000);
+    rt_task_set_periodic(NULL, TM_NOW, 100000000);
 
     while (1) {
         rt_task_wait_period(NULL);

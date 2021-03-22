@@ -136,7 +136,7 @@ Message *ComRobot::Write(Message* msg) {
             } catch (std::runtime_error &e) {
                 s = string(e.what());
 
-                if (s.find("imeout")) { // timeout detecté
+                if (s.find("timeout")) { // timeout detecté
                     msgAnswer = new Message(MESSAGE_ANSWER_ROBOT_TIMEOUT);
                 } else {
                     msgAnswer = new Message(MESSAGE_ANSWER_COM_ERROR);
