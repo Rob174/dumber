@@ -278,7 +278,7 @@ void Tasks::ReceiveFromMonTask(void *arg) {
     /**************************************************************************************/
     rt_sem_p(&sem_serverOk, TM_INFINITE);
     cout << "Received message from monitor activated" << endl << flush;
-
+    
     while (1) {
         msgRcv = monitor.Read();
         cout << "Rcv <= " << msgRcv->ToString() << endl << flush;
@@ -291,13 +291,14 @@ void Tasks::ReceiveFromMonTask(void *arg) {
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD)) {
             rt_mutex_acquire(&mutex_modeWD, TM_INFINITE);
             modeRobot = MESSAGE_ROBOT_START_WITHOUT_WD;
+            cout << "RELEASED" << endl << flush;
             rt_mutex_release(&mutex_modeWD);
-            rt_sem_v(&sem_startRobot);
+            rt_sem_broadcast(&sem_startRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITH_WD)) {
             rt_mutex_acquire(&mutex_modeWD, TM_INFINITE);
             modeRobot = MESSAGE_ROBOT_START_WITH_WD;
             rt_mutex_release(&mutex_modeWD);
-            rt_sem_v(&sem_startRobot);
+            rt_sem_broadcast(&sem_startRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_GO_FORWARD) ||
                 msgRcv->CompareID(MESSAGE_ROBOT_GO_BACKWARD) ||
                 msgRcv->CompareID(MESSAGE_ROBOT_GO_LEFT) ||
@@ -356,17 +357,15 @@ void Tasks::StartRobotTask(void *arg) {
     /**************************************************************************************/
     /* The task startRobot starts here                                                    */
     /**************************************************************************************/
-    rt_mutex_acquire(&mutex_modeWD, TM_INFINITE);
-        
-    if(modeRobot == 22) {
-        
-      
-        //rt_mutex_release(&mutex_modeWD);
-        
+    while (1) {
         Message * msgSend;
-        while (1) {
+        rt_sem_p(&sem_startRobot, TM_INFINITE);
+        rt_mutex_acquire(&mutex_modeWD, TM_INFINITE);
+        int mode_robot = modeRobot;
+        cout << "MODE_ROBOT VALUE :" << mode_robot << endl << flush; 
+        rt_mutex_release(&mutex_modeWD);
 
-            rt_sem_p(&sem_startRobot, TM_INFINITE);
+        if(mode_robot == MESSAGE_ROBOT_START_WITHOUT_WD) {
             cout << "Start robot without watchdog (";
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             msgSend = robot.Write(robot.StartWithoutWD());
@@ -383,16 +382,7 @@ void Tasks::StartRobotTask(void *arg) {
                 rt_mutex_release(&mutex_robotStarted);
             }
         }
-    }
-    else if (modeRobot == 23) {
-        
-  
-        rt_mutex_release(&mutex_modeWD);
-        
-        Message * msgSend;
-        while (1) {
-
-            rt_sem_p(&sem_startRobot, TM_INFINITE);
+        else if (mode_robot == MESSAGE_ROBOT_START_WITH_WD) {
             cout << "Start robot with watchdog (";
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             msgSend = robot.Write(robot.StartWithWD());
@@ -402,14 +392,14 @@ void Tasks::StartRobotTask(void *arg) {
                 rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
                 robotStarted = 1;
                 rt_mutex_release(&mutex_robotStarted);
-                
+
                 rt_mutex_acquire(&mutex_compteurWD, TM_INFINITE);
                 compteurWD = 0;
                 rt_mutex_release(&mutex_compteurWD);
                 rt_sem_v(&sem_reloadWD);
             }
         } 
-    } else rt_mutex_release(&mutex_modeWD);
+    }
 }
 
 void Tasks::ReloadWD(void *arg) {
@@ -417,7 +407,7 @@ void Tasks::ReloadWD(void *arg) {
     // Synchronization barrier (waiting that all tasks are starting)
     rt_sem_p(&sem_barrier, TM_INFINITE);
     Message * msgSend;
-    
+    /*
     rt_task_set_periodic(NULL, TM_NOW, 1000000000);
     while(1){
         rt_task_wait_period(NULL);
@@ -437,6 +427,7 @@ void Tasks::ReloadWD(void *arg) {
             compteurWD++;
             cout << "compterWD is " << compteurWD << endl << flush;
             if (compteurWD == 3) {
+                cout << "Arret car WD" << endl << flush;
                 // Par précaution on arrête le robot
                 rt_mutex_acquire(&mutex_robot, TM_INFINITE);
                 robot.Stop();
@@ -449,7 +440,7 @@ void Tasks::ReloadWD(void *arg) {
             }
             rt_mutex_release(&mutex_compteurWD);
         }
-    }
+    }*/
 }
 /**
  * @brief Thread handling control of the robot.
