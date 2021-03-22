@@ -113,6 +113,7 @@ private:
     /**********************************************************************/
     int MSG_QUEUE_SIZE;
     RT_QUEUE q_messageToMon;
+    RT_QUEUE q_messageToRobot;
     
     /**********************************************************************/
     /* Tasks' functions                                                   */
@@ -146,6 +147,8 @@ private:
      * @brief Thread handling control of the robot.
      */
     void MoveTask(void *arg);
+    
+    SendToRobotTask(void* arg);
     
     MessageState Check_ComRobot(Message* message);
     /**

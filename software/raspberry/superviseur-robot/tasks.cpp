@@ -135,6 +135,10 @@ void Tasks::Init() {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    if (err = rt_task_create(&th_sendToMon, "th_sendToRobot", 0, PRIORITY_TSENDTOMON, 0)) {
+        cerr << "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     if (err = rt_task_create(&th_battery, "th_battery", 0, PRIORITY_TBATTERY, 0)) {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
@@ -478,7 +482,33 @@ const string MESSAGE_ID_STRING[] = {
     "Robot state [Busy]"
 };
 
+void Tasks::SendToRobotTask(void* arg) {
+    Message *msg;
+    
+    cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
+    // Synchronization barrier (waiting that all tasks are starting)
+    rt_sem_p(&sem_barrier, TM_INFINITE);
 
+    /**************************************************************************************/
+    /* The task sendToRobot starts here                                                     */
+    /**************************************************************************************/
+    rt_sem_p(&sem_startRobot, TM_INFINITE);
+
+    while (1) {
+        cout << "wait msg to send" << endl << flush;
+        msg = ReadInQueue(&q_messageToRobot);
+        cout << "Send msg to mon: " << msg->ToString() << endl << flush;
+        rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+        message_response_robot=robot.Write(msg); // The message is deleted with the Write
+        rt_mutex_release(&mutex_robot);
+        checked_sent_message=Check_ComRobot(msg);
+        cout << "-------------" << msg->ToString() << endl<<flush
+        if(checked_sent_message == MESSAGE_SENT_TO_ROBOT){
+            WriteInQueue(&q_messageToMon,message_status_robot);
+        }
+        
+    }
+}
 
 MessageState Tasks::Check_ComRobot(Message* message){
     MessageState find = MESSAGE_SENT_TO_ROBOT;
@@ -562,20 +592,8 @@ void Tasks::BatteryTask(void *arg) {
 
                 rt_task_wait_period(NULL);
                 bonjour_batterie = new Message ((MessageID) MESSAGE_ROBOT_BATTERY_GET);
-
                 string status_batterie;
-
-                rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-                message_status_robot = robot.Write(bonjour_batterie);
-                checked_sent_message = Check_ComRobot(message_status_robot);
-                rt_mutex_release(&mutex_robot);
-
-                cout << "-------------" << message_status_robot->ToString() << endl<<flush;
-
-                    
-                if(checked_sent_message == MESSAGE_SENT_TO_ROBOT){
-                    WriteInQueue(&q_messageToMon,message_status_robot);
-                } else if(checked_sent_message == CONNECTION_LOST_WITH_ROBOT) break;
+                WriteInQueue(&q_messageToRobot,bonjour_batterie);
             }
         }
     }
