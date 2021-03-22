@@ -31,6 +31,7 @@
 
 //Variables globales
 int comRobot_FailCounter = 0;
+int comRobot_Lost = 0;
 /*
  * Some remarks:
  * 1- This program is mostly a template. It shows you how to create tasks, semaphore
@@ -78,6 +79,10 @@ void Tasks::Init() {
         exit(EXIT_FAILURE);
     }
     if (err = rt_mutex_create(&mutex_comrobot_failcounter, NULL)) {
+        cerr << "Error mutex create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_mutex_create(&mutex_comrobot_lost, NULL)) {
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -135,7 +140,7 @@ void Tasks::Init() {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
-    if (err = rt_task_create(&th_sendToMon, "th_sendToRobot", 0, PRIORITY_TSENDTOMON, 0)) {
+    if (err = rt_task_create(&th_sendToRobot, "th_sendToRobot", 0, PRIORITY_TSENDTOMON, 0)) {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -149,6 +154,10 @@ void Tasks::Init() {
     /* Message queues creation                                                            */
     /**************************************************************************************/
     if ((err = rt_queue_create(&q_messageToMon, "q_messageToMon", sizeof (Message*)*50, Q_UNLIMITED, Q_FIFO)) < 0) {
+        cerr << "Error msg queue create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if ((err = rt_queue_create(&q_messageToRobot, "q_messageToRobot", sizeof (Message*)*50, Q_UNLIMITED, Q_FIFO)) < 0) {
         cerr << "Error msg queue create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -188,6 +197,11 @@ void Tasks::Run() {
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_start(&th_battery, (void(*)(void*)) & Tasks::BatteryTask, this)) {
+        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    
+    if (err = rt_task_start(&th_sendToRobot, (void(*)(void*)) & Tasks::SendToRobotTask, this)) {
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -493,18 +507,20 @@ void Tasks::SendToRobotTask(void* arg) {
     /* The task sendToRobot starts here                                                     */
     /**************************************************************************************/
     rt_sem_p(&sem_startRobot, TM_INFINITE);
-
+    Message * message_response_robot;
+    MessageState checked_sent_message;
     while (1) {
         cout << "wait msg to send" << endl << flush;
         msg = ReadInQueue(&q_messageToRobot);
-        cout << "Send msg to mon: " << msg->ToString() << endl << flush;
+        cout << "Send msg to robot: " << msg->ToString() << endl << flush;
         rt_mutex_acquire(&mutex_robot, TM_INFINITE);
         message_response_robot=robot.Write(msg); // The message is deleted with the Write
         rt_mutex_release(&mutex_robot);
-        checked_sent_message=Check_ComRobot(msg);
-        cout << "-------------" << msg->ToString() << endl<<flush
+        checked_sent_message=Check_ComRobot(message_response_robot);
+        cout << "Send msg to robot OK "<< endl;
         if(checked_sent_message == MESSAGE_SENT_TO_ROBOT){
-            WriteInQueue(&q_messageToMon,message_status_robot);
+            WriteInQueue(&q_messageToMon,message_response_robot);
+            cout << "Send msg to mon OK "<< endl;
         }
         
     }
@@ -516,10 +532,13 @@ MessageState Tasks::Check_ComRobot(Message* message){
     cout << MESSAGE_ID_STRING[message->GetID()] << endl;
     if (message->CompareID(MESSAGE_ANSWER_ROBOT_TIMEOUT)){
         cout << "HELLO LES AMIS" << endl<<flush;
+        rt_mutex_acquire(&mutex_comrobot_failcounter, TM_INFINITE);
         ++comRobot_FailCounter;
-        
+        rt_mutex_release(&mutex_comrobot_failcounter);
         find=MESSAGE_NOT_SENT_TO_ROBOT;
+        rt_mutex_acquire(&mutex_comrobot_failcounter, TM_INFINITE);
         if (comRobot_FailCounter==3){
+            rt_mutex_release(&mutex_comrobot_failcounter);
             Message * errorMessage = new Message(MESSAGE_ANSWER_COM_ERROR);
             WriteInQueue(&q_messageToMon,errorMessage);
             
@@ -540,13 +559,16 @@ MessageState Tasks::Check_ComRobot(Message* message){
             cout << "DAZJIOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOZ"<< endl << flush;
             robotStarted = 0;
             rt_mutex_release(&mutex_robotStarted);
-            
             find = CONNECTION_LOST_WITH_ROBOT;
-            
+            rt_mutex_acquire(&mutex_comrobot_lost, TM_INFINITE);
+            comRobot_Lost = 1;
+            rt_mutex_release(&mutex_comrobot_lost);
         }
         
     }else{
+        rt_mutex_acquire(&mutex_comrobot_failcounter, TM_INFINITE);
         comRobot_FailCounter=0;
+        rt_mutex_release(&mutex_comrobot_failcounter);
     }
     return find;
 }
@@ -573,15 +595,11 @@ void Tasks::BatteryTask(void *arg) {
 
 
         Message * bonjour_batterie;
-        Message * message_status_robot;
-
-        MessageState checked_sent_message;
+        
 
         while (1) {
 
             // Instruction moved inside while to be able restarting program without lauching task again
-
-
             bool started = false;
 
             rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
@@ -589,11 +607,18 @@ void Tasks::BatteryTask(void *arg) {
             rt_mutex_release(&mutex_robotStarted);
 
             if(started){
-
                 rt_task_wait_period(NULL);
                 bonjour_batterie = new Message ((MessageID) MESSAGE_ROBOT_BATTERY_GET);
-                string status_batterie;
+                cout << "battery add in queue" << endl;
                 WriteInQueue(&q_messageToRobot,bonjour_batterie);
+            }
+            
+            rt_mutex_acquire(&mutex_comrobot_lost, TM_INFINITE);
+            if (comRobot_Lost == 1){
+                 comRobot_Lost=0;
+                 rt_mutex_release(&mutex_comrobot_lost);
+                 cout << "arret robot" << endl;
+                 break;
             }
         }
     }

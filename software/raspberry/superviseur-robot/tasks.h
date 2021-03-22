@@ -86,6 +86,7 @@ private:
     RT_TASK th_openComRobot;
     RT_TASK th_startRobot;
     RT_TASK th_move;
+    RT_TASK th_sendToRobot;
     RT_TASK th_battery;
     RT_TASK th_stopRobot;
     
@@ -98,6 +99,7 @@ private:
     RT_MUTEX mutex_move;
     
     RT_MUTEX mutex_comrobot_failcounter;
+    RT_MUTEX mutex_comrobot_lost;
 
     /**********************************************************************/
     /* Semaphores                                                         */
@@ -148,7 +150,7 @@ private:
      */
     void MoveTask(void *arg);
     
-    SendToRobotTask(void* arg);
+    void SendToRobotTask(void* arg);
     
     MessageState Check_ComRobot(Message* message);
     /**
