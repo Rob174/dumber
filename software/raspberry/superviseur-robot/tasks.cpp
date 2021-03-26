@@ -368,7 +368,7 @@ void Tasks::StartRobotTask(void *arg) {
         rt_sem_p(&sem_startRobot, TM_INFINITE);
         cout << "Start robot without watchdog (";
         rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-        msgSend = robot.Write(robot.StartWithoutWD());
+        msgSend=robot.Write(robot.StartWithoutWD());
         rt_mutex_release(&mutex_robot);
         cout << msgSend->GetID();
         cout << ")" << endl;
@@ -412,10 +412,8 @@ void Tasks::MoveTask(void *arg) {
             rt_mutex_release(&mutex_move);
             
             cout << " move: " << cpMove;
-            
-            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-            robot.Write(new Message((MessageID)cpMove));
-            rt_mutex_release(&mutex_robot);
+            ;
+             WriteInQueue(&q_messageToRobot,(new Message((MessageID)cpMove)));
         }
         cout << endl << flush;
     }
@@ -503,7 +501,7 @@ void Tasks::SendToRobotTask(void* arg) {
         cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
         // Synchronization barrier (waiting that all tasks are starting)
         rt_sem_p(&sem_barrier, TM_INFINITE);
-
+        comRobot_Lost=0;
         /**************************************************************************************/
         /* The task sendToRobot starts here                                                     */
         /**************************************************************************************/
@@ -511,11 +509,6 @@ void Tasks::SendToRobotTask(void* arg) {
         Message * message_response_robot;
         MessageState checked_sent_message;
         while (1) {
-            bool started = false;
-            rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
-            started = (bool) robotStarted;
-            rt_mutex_release(&mutex_robotStarted);
-            if (started){
                 cout << "wait msg to send" << endl << flush;
                 msg = ReadInQueue(&q_messageToRobot);
                 cout << "Send msg to robot: " << msg->ToString() << endl << flush;
@@ -527,13 +520,12 @@ void Tasks::SendToRobotTask(void* arg) {
                 if(checked_sent_message == MESSAGE_SENT_TO_ROBOT){
                     WriteInQueue(&q_messageToMon,message_response_robot);
                     cout << "Send msg to mon OK "<< endl;
-                }else{
+                }else if(comRobot_FailCounter==3){
                     break;
                 }
             }
         }
     }
-}
 
 MessageState Tasks::Check_ComRobot(Message* message){
     MessageState find = MESSAGE_SENT_TO_ROBOT;
@@ -548,15 +540,11 @@ MessageState Tasks::Check_ComRobot(Message* message){
         rt_mutex_acquire(&mutex_comrobot_failcounter, TM_INFINITE);
         if (comRobot_FailCounter==3){
             rt_mutex_release(&mutex_comrobot_failcounter);
-            Message * errorMessage = new Message(MESSAGE_ANSWER_COM_ERROR);
-            WriteInQueue(&q_messageToMon,errorMessage);
-            
             // Closing communication with the robot
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             cout << "DAZJIOOOOOOOOOOOOOOOOOOOZ"<< endl<<flush;
             robot.Reset();
             rt_mutex_release(&mutex_robot);    
-            
             // Setting failcounter global variable to 0
             rt_mutex_acquire(&mutex_comrobot_failcounter, TM_INFINITE);
             cout << "DAZJIOOOOOZ"<< endl <<flush;
@@ -570,8 +558,11 @@ MessageState Tasks::Check_ComRobot(Message* message){
             rt_mutex_release(&mutex_robotStarted);
             find = CONNECTION_LOST_WITH_ROBOT;
             rt_mutex_acquire(&mutex_comrobot_lost, TM_INFINITE);
+            cout << "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV"<< endl << flush;
             comRobot_Lost = 1;
             rt_mutex_release(&mutex_comrobot_lost);
+            Message * errorMessage = new Message(MESSAGE_ANSWER_COM_ERROR);
+            WriteInQueue(&q_messageToMon,errorMessage);
         }
         
     }else{
@@ -607,7 +598,7 @@ void Tasks::BatteryTask(void *arg) {
         
 
         while (1) {
-
+            rt_task_wait_period(NULL);
             // Instruction moved inside while to be able restarting program without lauching task again
             bool started = false;
 
@@ -616,7 +607,7 @@ void Tasks::BatteryTask(void *arg) {
             rt_mutex_release(&mutex_robotStarted);
 
             if(started){
-                rt_task_wait_period(NULL);
+                
                 bonjour_batterie = new Message ((MessageID) MESSAGE_ROBOT_BATTERY_GET);
                 cout << "battery add in queue" << endl;
                 WriteInQueue(&q_messageToRobot,bonjour_batterie);
@@ -624,10 +615,12 @@ void Tasks::BatteryTask(void *arg) {
             
             rt_mutex_acquire(&mutex_comrobot_lost, TM_INFINITE);
             if (comRobot_Lost == 1){
-                 comRobot_Lost=0;
+                 //comRobot_Lost=0;
                  rt_mutex_release(&mutex_comrobot_lost);
                  cout << "arret robot" << endl;
                  break;
+            } else {
+                rt_mutex_release(&mutex_comrobot_lost);
             }
         }
     }
