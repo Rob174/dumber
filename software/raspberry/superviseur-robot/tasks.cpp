@@ -512,7 +512,6 @@ void Tasks::SendToRobotTask(void* arg) {
         MessageState checked_sent_message;
         while (1) {
             bool started = false;
-
             rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
             started = (bool) robotStarted;
             rt_mutex_release(&mutex_robotStarted);
