@@ -358,14 +358,17 @@ void Tasks::StartRobotTask(void *arg) {
     cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
     // Synchronization barrier (waiting that all tasks are starting)
     rt_sem_p(&sem_barrier, TM_INFINITE);
-    
     /**************************************************************************************/
     /* The task startRobot starts here                                                    */
     /**************************************************************************************/
     while (1) {
-
+        
         Message * msgSend;
         rt_sem_p(&sem_startRobot, TM_INFINITE);
+        rt_mutex_acquire(&mutex_comrobot_lost, TM_INFINITE);
+        comRobot_Lost=0;
+        rt_mutex_release(&mutex_comrobot_lost);
+        
         cout << "Start robot without watchdog (";
         rt_mutex_acquire(&mutex_robot, TM_INFINITE);
         msgSend=robot.Write(robot.StartWithoutWD());
@@ -501,7 +504,7 @@ void Tasks::SendToRobotTask(void* arg) {
         cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
         // Synchronization barrier (waiting that all tasks are starting)
         rt_sem_p(&sem_barrier, TM_INFINITE);
-        comRobot_Lost=0;
+
         /**************************************************************************************/
         /* The task sendToRobot starts here                                                     */
         /**************************************************************************************/
@@ -563,6 +566,8 @@ MessageState Tasks::Check_ComRobot(Message* message){
             rt_mutex_release(&mutex_comrobot_lost);
             Message * errorMessage = new Message(MESSAGE_ANSWER_COM_ERROR);
             WriteInQueue(&q_messageToMon,errorMessage);
+            rt_queue_flush(&q_messageToRobot);
+
         }
         
     }else{
@@ -615,7 +620,6 @@ void Tasks::BatteryTask(void *arg) {
             
             rt_mutex_acquire(&mutex_comrobot_lost, TM_INFINITE);
             if (comRobot_Lost == 1){
-                 //comRobot_Lost=0;
                  rt_mutex_release(&mutex_comrobot_lost);
                  cout << "arret robot" << endl;
                  break;
