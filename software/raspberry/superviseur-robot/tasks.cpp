@@ -497,32 +497,42 @@ const string MESSAGE_ID_STRING[] = {
 };
 
 void Tasks::SendToRobotTask(void* arg) {
-    Message *msg;
-    
-    cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
-    // Synchronization barrier (waiting that all tasks are starting)
-    rt_sem_p(&sem_barrier, TM_INFINITE);
+    while(1){
+        Message *msg;
 
-    /**************************************************************************************/
-    /* The task sendToRobot starts here                                                     */
-    /**************************************************************************************/
-    rt_sem_p(&sem_startRobot, TM_INFINITE);
-    Message * message_response_robot;
-    MessageState checked_sent_message;
-    while (1) {
-        cout << "wait msg to send" << endl << flush;
-        msg = ReadInQueue(&q_messageToRobot);
-        cout << "Send msg to robot: " << msg->ToString() << endl << flush;
-        rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-        message_response_robot=robot.Write(msg); // The message is deleted with the Write
-        rt_mutex_release(&mutex_robot);
-        checked_sent_message=Check_ComRobot(message_response_robot);
-        cout << "Send msg to robot OK "<< endl;
-        if(checked_sent_message == MESSAGE_SENT_TO_ROBOT){
-            WriteInQueue(&q_messageToMon,message_response_robot);
-            cout << "Send msg to mon OK "<< endl;
+        cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
+        // Synchronization barrier (waiting that all tasks are starting)
+        rt_sem_p(&sem_barrier, TM_INFINITE);
+
+        /**************************************************************************************/
+        /* The task sendToRobot starts here                                                     */
+        /**************************************************************************************/
+        rt_sem_p(&sem_startRobot, TM_INFINITE);
+        Message * message_response_robot;
+        MessageState checked_sent_message;
+        while (1) {
+            bool started = false;
+
+            rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+            started = (bool) robotStarted;
+            rt_mutex_release(&mutex_robotStarted);
+            if (started){
+                cout << "wait msg to send" << endl << flush;
+                msg = ReadInQueue(&q_messageToRobot);
+                cout << "Send msg to robot: " << msg->ToString() << endl << flush;
+                rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+                message_response_robot=robot.Write(msg); // The message is deleted with the Write
+                rt_mutex_release(&mutex_robot);
+                checked_sent_message=Check_ComRobot(message_response_robot);
+                cout << "Send msg to robot OK "<< endl;
+                if(checked_sent_message == MESSAGE_SENT_TO_ROBOT){
+                    WriteInQueue(&q_messageToMon,message_response_robot);
+                    cout << "Send msg to mon OK "<< endl;
+                }else{
+                    break;
+                }
+            }
         }
-        
     }
 }
 
