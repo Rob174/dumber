@@ -78,13 +78,14 @@ void Tasks::Init() {
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
-<<<<<<< HEAD
     if (err = rt_mutex_create(&mutex_comrobot_failcounter, NULL)) {
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
     if (err = rt_mutex_create(&mutex_comrobot_lost, NULL)) {
-=======
+        cerr << "Error mutex create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     if (err = rt_mutex_create(&mutex_compteurWD, NULL)) {
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
@@ -94,7 +95,6 @@ void Tasks::Init() {
         exit(EXIT_FAILURE);
     }
     if (err = rt_mutex_create(&mutex_reloadWD, NULL)) {
->>>>>>> Fonctionnalite11
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -119,11 +119,11 @@ void Tasks::Init() {
         cerr << "Error semaphore create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
-<<<<<<< HEAD
     if (err = rt_sem_create(&sem_stopRobot, NULL, 0, S_FIFO)) {
-=======
+        cerr << "Error semaphore create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     if (err = rt_sem_create(&sem_reloadWD, NULL, 0, S_FIFO)) {
->>>>>>> Fonctionnalite11
         cerr << "Error semaphore create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -156,15 +156,15 @@ void Tasks::Init() {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
-<<<<<<< HEAD
     if (err = rt_task_create(&th_sendToRobot, "th_sendToRobot", 0, PRIORITY_TSENDTOMON, 0)) {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_create(&th_battery, "th_battery", 0, PRIORITY_TBATTERY, 0)) {
-=======
+        cerr << "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     if (err = rt_task_create(&th_reloadWD, "th_reloadWD", 0, PRIORITY_TSTARTROBOT, 0)) {
->>>>>>> Fonctionnalite11
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -327,8 +327,6 @@ void Tasks::ReceiveFromMonTask(void *arg) {
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_COM_OPEN)) {
             rt_sem_v(&sem_openComRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD)) {
-<<<<<<< HEAD
-=======
             rt_mutex_acquire(&mutex_modeWD, TM_INFINITE);
             modeRobot = MESSAGE_ROBOT_START_WITHOUT_WD;
             cout << "RELEASED" << endl << flush;
@@ -338,7 +336,6 @@ void Tasks::ReceiveFromMonTask(void *arg) {
             rt_mutex_acquire(&mutex_modeWD, TM_INFINITE);
             modeRobot = MESSAGE_ROBOT_START_WITH_WD;
             rt_mutex_release(&mutex_modeWD);
->>>>>>> Fonctionnalite11
             rt_sem_broadcast(&sem_startRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_GO_FORWARD) ||
                 msgRcv->CompareID(MESSAGE_ROBOT_GO_BACKWARD) ||
@@ -398,23 +395,13 @@ void Tasks::StartRobotTask(void *arg) {
     /* The task startRobot starts here                                                    */
     /**************************************************************************************/
     while (1) {
-<<<<<<< HEAD
         
-        Message * msgSend;
         rt_sem_p(&sem_startRobot, TM_INFINITE);
         rt_mutex_acquire(&mutex_comrobot_lost, TM_INFINITE);
         comRobot_Lost=0;
         rt_mutex_release(&mutex_comrobot_lost);
         
-        cout << "Start robot without watchdog (";
-        rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-        msgSend=robot.Write(robot.StartWithoutWD());
-        rt_mutex_release(&mutex_robot);
-        cout << msgSend->GetID();
-        cout << ")" << endl;
-=======
         Message * msgSend;
-        rt_sem_p(&sem_startRobot, TM_INFINITE);
         rt_mutex_acquire(&mutex_modeWD, TM_INFINITE);
         int mode_robot = modeRobot;
         cout << "MODE_ROBOT VALUE :" << mode_robot << endl << flush; 
@@ -427,7 +414,6 @@ void Tasks::StartRobotTask(void *arg) {
             rt_mutex_release(&mutex_robot);
             cout << msgSend->GetID();
             cout << ")" << endl;
->>>>>>> Fonctionnalite11
 
             cout << "Movement answer: " << msgSend->ToString() << endl << flush;
             WriteInQueue(&q_messageToMon, msgSend);  // msgSend will be deleted by sendToMon
