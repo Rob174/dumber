@@ -385,14 +385,14 @@ void Tasks::StartRobotTask(void *arg) {
         else if (mode_robot == MESSAGE_ROBOT_START_WITH_WD) {
             cout << "Start robot with watchdog (";
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-            msgSend = robot.Write(robot.StartWithoutWD());
+            msgSend = robot.Write(robot.StartWithWD());
             rt_mutex_release(&mutex_robot);
             cout << msgSend->GetID();
             cout << ")" << endl;
-
+            
             cout << "Movement answer: " << msgSend->ToString() << endl << flush;
             WriteInQueue(&q_messageToMon, msgSend);  // msgSend will be deleted by sendToMon
-
+                
             if (msgSend->GetID() == MESSAGE_ANSWER_ACK) {
                 rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
                 robotStarted = 1;
@@ -413,17 +413,18 @@ void Tasks::ReloadWD(void *arg) {
     rt_sem_p(&sem_barrier, TM_INFINITE);
     Message * msgSend;
     
+    rt_sem_p(&sem_reloadWD, TM_INFINITE);
+    
     rt_task_set_periodic(NULL, TM_NOW, 1000000000);
     while(1){
         rt_task_wait_period(NULL);
-        rt_sem_p(&sem_reloadWD, TM_INFINITE);
         cout << "Periodic update WD";
         rt_mutex_acquire(&mutex_robot, TM_INFINITE);
         msgSend = robot.Write(new Message((MessageID)MESSAGE_ROBOT_RELOAD_WD));
         rt_mutex_release(&mutex_robot);
         if(msgSend->GetID() == MESSAGE_ANSWER_ACK){
             rt_mutex_acquire(&mutex_compteurWD, TM_INFINITE);
-            compteurWD--;
+            compteurWD = compteurWD == 0 ? compteurWD : compteurWD -1;
             cout << "compterWD is " << compteurWD << endl << flush;
             rt_mutex_release(&mutex_compteurWD);
         }
