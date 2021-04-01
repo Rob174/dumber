@@ -585,7 +585,6 @@ const string MESSAGE_ID_STRING[] = {
 };
 
 void Tasks::SendToRobotTask(void* arg) {
-    while(1){
         Message *msg;
 
         cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
@@ -610,11 +609,7 @@ void Tasks::SendToRobotTask(void* arg) {
                 if(checked_sent_message == MESSAGE_SENT_TO_ROBOT){
                     WriteInQueue(&q_messageToMon,message_response_robot);
                     cout << "Send msg to mon OK "<< endl;
-                }else if(comRobot_FailCounter==3){
-                    cout<<"check: "<< checked_sent_message << "atttendu: "<< CONNECTION_LOST_WITH_ROBOT<<endl<<flush; 
-                    break;
                 }
-            }
         }
     }
 
