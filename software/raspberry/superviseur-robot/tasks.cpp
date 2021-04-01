@@ -28,7 +28,8 @@
 #define PRIORITY_TSTARTROBOT 20
 #define PRIORITY_TCAMERA 21
 #define PRIORITY_TBATTERY 18
-
+#define PRIORITY_TSENDTOROBOT 26
+#define PRIORITY_TRELOADWD 28
 //Variables globales
 int comRobot_FailCounter = 0;
 int comRobot_Lost = 0;
@@ -156,7 +157,7 @@ void Tasks::Init() {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
-    if (err = rt_task_create(&th_sendToRobot, "th_sendToRobot", 0, PRIORITY_TSENDTOMON, 0)) {
+    if (err = rt_task_create(&th_sendToRobot, "th_sendToRobot", 0, PRIORITY_TSENDTOROBOT, 0)) {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -164,7 +165,7 @@ void Tasks::Init() {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
-    if (err = rt_task_create(&th_reloadWD, "th_reloadWD", 0, PRIORITY_TSTARTROBOT, 0)) {
+    if (err = rt_task_create(&th_reloadWD, "th_reloadWD", 0, PRIORITY_TRELOADWD, 0)) {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -427,7 +428,7 @@ void Tasks::StartRobotTask(void *arg) {
         else if (mode_robot == MESSAGE_ROBOT_START_WITH_WD) {
             cout << "Start robot with watchdog (";
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-            msgSend = robot.Write(robot.StartWithoutWD());
+            msgSend = robot.Write(robot.StartWithWD());
             rt_mutex_release(&mutex_robot);
             cout << msgSend->GetID();
             cout << ")" << endl;
@@ -439,10 +440,6 @@ void Tasks::StartRobotTask(void *arg) {
                 rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
                 robotStarted = 1;
                 rt_mutex_release(&mutex_robotStarted);
-
-                rt_mutex_acquire(&mutex_compteurWD, TM_INFINITE);
-                compteurWD = 0;
-                rt_mutex_release(&mutex_compteurWD);
                 rt_sem_v(&sem_reloadWD);
             }
         } 
@@ -451,43 +448,24 @@ void Tasks::StartRobotTask(void *arg) {
 
 
 void Tasks::ReloadWD(void *arg) {
+    while(1){
     cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
     // Synchronization barrier (waiting that all tasks are starting)
     rt_sem_p(&sem_barrier, TM_INFINITE);
     Message * msgSend;
-
-    rt_task_set_periodic(NULL, TM_NOW, 1000000000);
-    while(1){
+    rt_sem_p(&sem_reloadWD, TM_INFINITE);
+    SRTIME time = rt_timer_ticks2ns(1000000000);
+    rt_task_set_periodic(NULL, TM_NOW, time);
+    RTIME now = rt_timer_read();
+    int i=0;
+    while(i<10){
         rt_task_wait_period(NULL);
-        rt_sem_p(&sem_reloadWD, TM_INFINITE);
-        cout << "Periodic update WD";
-        rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-        msgSend = robot.Write(new Message((MessageID)MESSAGE_ROBOT_RELOAD_WD));
-        rt_mutex_release(&mutex_robot);
-        if(msgSend->GetID() == MESSAGE_ANSWER_ACK){
-            rt_mutex_acquire(&mutex_compteurWD, TM_INFINITE);
-            compteurWD--;
-            cout << "compterWD is " << compteurWD << endl << flush;
-            rt_mutex_release(&mutex_compteurWD);
-        }
-        else if(msgSend->GetID() == MESSAGE_ANSWER_NACK) {
-            rt_mutex_acquire(&mutex_compteurWD, TM_INFINITE);
-            compteurWD++;
-            cout << "compterWD is " << compteurWD << endl << flush;
-            if (compteurWD == 3) {
-                cout << "Arret car WD" << endl << flush;
-                // Par précaution on arrête le robot
-                rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-                robot.Stop();
-                rt_mutex_release(&mutex_robot);
-                // Stopper com avec robot
-                rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-                robot.Reset();
-                robot.Close();
-                rt_mutex_release(&mutex_robot);
-            }
-            rt_mutex_release(&mutex_compteurWD);
-        }
+        RTIME now2 = rt_timer_read();
+        cout << "Periodic update WD time:"<< (now2-now)/1000000 <<endl<<flush;
+        WriteInQueue(&q_messageToRobot,new Message((MessageID)MESSAGE_ROBOT_RELOAD_WD));
+        i++;
+    }
+    cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"<< endl << flush;
     }
 }
 
@@ -520,8 +498,7 @@ void Tasks::MoveTask(void *arg) {
             rt_mutex_release(&mutex_move);
             
             cout << " move: " << cpMove;
-            ;
-             WriteInQueue(&q_messageToRobot,(new Message((MessageID)cpMove)));
+            WriteInQueue(&q_messageToRobot,(new Message((MessageID)cpMove)));
         }
         cout << endl << flush;
     }
@@ -617,18 +594,18 @@ void Tasks::SendToRobotTask(void* arg) {
         Message * message_response_robot;
         MessageState checked_sent_message;
         while (1) {
-                cout << "wait msg to send" << endl << flush;
+               cout << "wait msg to send" << endl << flush;
                 msg = ReadInQueue(&q_messageToRobot);
                 cout << "Send msg to robot: " << msg->ToString() << endl << flush;
                 rt_mutex_acquire(&mutex_robot, TM_INFINITE);
                 message_response_robot=robot.Write(msg); // The message is deleted with the Write
                 rt_mutex_release(&mutex_robot);
                 checked_sent_message=Check_ComRobot(message_response_robot);
-                cout << "Send msg to robot OK "<< endl;
+                cout << "Check OK "<< endl;
                 if(checked_sent_message == MESSAGE_SENT_TO_ROBOT){
                     WriteInQueue(&q_messageToMon,message_response_robot);
                     cout << "Send msg to mon OK "<< endl;
-                }else if(comRobot_FailCounter==3){
+                }else if(checked_sent_message == CONNECTION_LOST_WITH_ROBOT){
                     break;
                 }
             }
@@ -666,7 +643,7 @@ MessageState Tasks::Check_ComRobot(Message* message){
             rt_mutex_release(&mutex_robotStarted);
             find = CONNECTION_LOST_WITH_ROBOT;
             rt_mutex_acquire(&mutex_comrobot_lost, TM_INFINITE);
-            cout << "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV"<< endl << flush;
+            cout << "VVVV find : "<< find << endl << flush;
             comRobot_Lost = 1;
             rt_mutex_release(&mutex_comrobot_lost);
             Message * errorMessage = new Message(MESSAGE_ANSWER_COM_ERROR);
