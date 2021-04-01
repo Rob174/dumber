@@ -28,8 +28,8 @@
 #define PRIORITY_TSTARTROBOT 20
 #define PRIORITY_TCAMERA 21
 #define PRIORITY_TBATTERY 18
-#define PRIORITY_TSENDTOROBOT 26
-#define PRIORITY_TRELOADWD 28
+#define PRIORITY_TSENDTOROBOT 22
+#define PRIORITY_TRELOADWD 20
 //Variables globales
 int comRobot_FailCounter = 0;
 int comRobot_Lost = 0;
@@ -293,7 +293,7 @@ void Tasks::SendToMonTask(void* arg) {
     rt_sem_p(&sem_serverOk, TM_INFINITE);
 
     while (1) {
-        cout << "wait msg to send" << endl << flush;
+        cout << "wait msg to send Mon" << endl << flush;
         msg = ReadInQueue(&q_messageToMon);
         cout << "Send msg to mon: " << msg->ToString() << endl << flush;
         rt_mutex_acquire(&mutex_monitor, TM_INFINITE);
@@ -418,10 +418,13 @@ void Tasks::StartRobotTask(void *arg) {
 
             cout << "Movement answer: " << msgSend->ToString() << endl << flush;
             WriteInQueue(&q_messageToMon, msgSend);  // msgSend will be deleted by sendToMon
-
+            cout << "LLLLLLLLLLLL" <<endl << flush;
             if (msgSend->GetID() == MESSAGE_ANSWER_ACK) {
+                cout << "OOOOOOOOOOOOOOOO" <<endl << flush;
+                rt_queue_flush(&q_messageToRobot);
                 rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
                 robotStarted = 1;
+                cout << "KKKKKKKKKKKKKKKKKK" <<endl << flush;
                 rt_mutex_release(&mutex_robotStarted);
             }
         }
@@ -437,6 +440,7 @@ void Tasks::StartRobotTask(void *arg) {
             WriteInQueue(&q_messageToMon, msgSend);  // msgSend will be deleted by sendToMon
 
             if (msgSend->GetID() == MESSAGE_ANSWER_ACK) {
+                rt_queue_flush(&q_messageToRobot);
                 rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
                 robotStarted = 1;
                 rt_mutex_release(&mutex_robotStarted);
@@ -491,6 +495,7 @@ void Tasks::MoveTask(void *arg) {
         cout << "Periodic movement update";
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         rs = robotStarted;
+        cout << " rs: "<< rs << endl<< flush;
         rt_mutex_release(&mutex_robotStarted);
         if (rs == 1) {
             rt_mutex_acquire(&mutex_move, TM_INFINITE);
@@ -594,7 +599,7 @@ void Tasks::SendToRobotTask(void* arg) {
         Message * message_response_robot;
         MessageState checked_sent_message;
         while (1) {
-               cout << "wait msg to send" << endl << flush;
+                cout << "wait msg to send" << endl << flush;
                 msg = ReadInQueue(&q_messageToRobot);
                 cout << "Send msg to robot: " << msg->ToString() << endl << flush;
                 rt_mutex_acquire(&mutex_robot, TM_INFINITE);
@@ -605,7 +610,8 @@ void Tasks::SendToRobotTask(void* arg) {
                 if(checked_sent_message == MESSAGE_SENT_TO_ROBOT){
                     WriteInQueue(&q_messageToMon,message_response_robot);
                     cout << "Send msg to mon OK "<< endl;
-                }else if(checked_sent_message == CONNECTION_LOST_WITH_ROBOT){
+                }else if(comRobot_FailCounter==3){
+                    cout<<"check: "<< checked_sent_message << "atttendu: "<< CONNECTION_LOST_WITH_ROBOT<<endl<<flush; 
                     break;
                 }
             }
@@ -631,10 +637,7 @@ MessageState Tasks::Check_ComRobot(Message* message){
             robot.Reset();
             rt_mutex_release(&mutex_robot);    
             // Setting failcounter global variable to 0
-            rt_mutex_acquire(&mutex_comrobot_failcounter, TM_INFINITE);
-            cout << "DAZJIOOOOOZ"<< endl <<flush;
-            comRobot_FailCounter=0;
-            rt_mutex_release(&mutex_comrobot_failcounter);  
+  
             
             // Setting robotStarted global variable to 0.
             rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
@@ -648,7 +651,6 @@ MessageState Tasks::Check_ComRobot(Message* message){
             rt_mutex_release(&mutex_comrobot_lost);
             Message * errorMessage = new Message(MESSAGE_ANSWER_COM_ERROR);
             WriteInQueue(&q_messageToMon,errorMessage);
-            rt_queue_flush(&q_messageToRobot);
 
         }
         
