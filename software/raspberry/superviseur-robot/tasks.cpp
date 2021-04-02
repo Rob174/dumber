@@ -293,9 +293,9 @@ void Tasks::SendToMonTask(void* arg) {
     rt_sem_p(&sem_serverOk, TM_INFINITE);
 
     while (1) {
-        cout << "wait msg to send Mon" << endl << flush;
+        //cout << "wait msg to send Mon" << endl << flush;
         msg = ReadInQueue(&q_messageToMon);
-        cout << "Send msg to mon: " << msg->ToString() << endl << flush;
+        //cout << "Send msg to mon: " << msg->ToString() << endl << flush;
         rt_mutex_acquire(&mutex_monitor, TM_INFINITE);
         monitor.Write(msg); // The message is deleted with the Write
         rt_mutex_release(&mutex_monitor);
@@ -416,7 +416,7 @@ void Tasks::StartRobotTask(void *arg) {
             cout << msgSend->GetID();
             cout << ")" << endl;
 
-            cout << "Movement answer: " << msgSend->ToString() << endl << flush;
+            //cout << "Movement answer: " << msgSend->ToString() << endl << flush;
             WriteInQueue(&q_messageToMon, msgSend);  // msgSend will be deleted by sendToMon
             cout << "LLLLLLLLLLLL" <<endl << flush;
             if (msgSend->GetID() == MESSAGE_ANSWER_ACK) {
@@ -436,7 +436,7 @@ void Tasks::StartRobotTask(void *arg) {
             cout << msgSend->GetID();
             cout << ")" << endl;
 
-            cout << "Movement answer: " << msgSend->ToString() << endl << flush;
+            //cout << "Movement answer: " << msgSend->ToString() << endl << flush;
             WriteInQueue(&q_messageToMon, msgSend);  // msgSend will be deleted by sendToMon
 
             if (msgSend->GetID() == MESSAGE_ANSWER_ACK) {
@@ -452,24 +452,25 @@ void Tasks::StartRobotTask(void *arg) {
 
 
 void Tasks::ReloadWD(void *arg) {
-    while(1){
-    cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
     // Synchronization barrier (waiting that all tasks are starting)
     rt_sem_p(&sem_barrier, TM_INFINITE);
-    Message * msgSend;
-    rt_sem_p(&sem_reloadWD, TM_INFINITE);
-    SRTIME time = rt_timer_ticks2ns(1000000000);
-    rt_task_set_periodic(NULL, TM_NOW, time);
-    RTIME now = rt_timer_read();
-    int i=0;
-    while(i<10){
-        rt_task_wait_period(NULL);
-        RTIME now2 = rt_timer_read();
-        cout << "Periodic update WD time:"<< (now2-now)/1000000 <<endl<<flush;
-        WriteInQueue(&q_messageToRobot,new Message((MessageID)MESSAGE_ROBOT_RELOAD_WD));
-        i++;
-    }
-    cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"<< endl << flush;
+    while(1){
+        Message * msgSend;
+        rt_sem_p(&sem_reloadWD, TM_INFINITE);
+        cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
+        cout << "//////////////////////////////////////////////////" << endl << "//////////////////////////////////////////////////" << endl << flush;
+        SRTIME time = rt_timer_ticks2ns(1000000000);
+        rt_task_set_periodic(NULL, TM_NOW, time);
+        RTIME now = rt_timer_read();
+        int i=0;
+        while(i<10){
+            rt_task_wait_period(NULL);
+            RTIME now2 = rt_timer_read();
+            cout << "Periodic update WD time:"<< (now2-now)/1000000 <<endl<<flush;
+            WriteInQueue(&q_messageToRobot,new Message((MessageID)MESSAGE_ROBOT_RELOAD_WD));
+            i++;
+        }
+        cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"<< endl << flush;
     }
 }
 
@@ -492,17 +493,17 @@ void Tasks::MoveTask(void *arg) {
 
     while (1) {
         rt_task_wait_period(NULL);
-        cout << "Periodic movement update";
+        //cout << "Periodic movement update";
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         rs = robotStarted;
-        cout << " rs: "<< rs << endl<< flush;
+        //cout << " rs: "<< rs << endl<< flush;
         rt_mutex_release(&mutex_robotStarted);
         if (rs == 1) {
             rt_mutex_acquire(&mutex_move, TM_INFINITE);
             cpMove = move;
             rt_mutex_release(&mutex_move);
             
-            cout << " move: " << cpMove;
+            //cout << " move: " << cpMove;
             WriteInQueue(&q_messageToRobot,(new Message((MessageID)cpMove)));
         }
         cout << endl << flush;
@@ -608,7 +609,7 @@ void Tasks::SendToRobotTask(void* arg) {
                 cout << "Check OK "<< endl;
                 if(checked_sent_message == MESSAGE_SENT_TO_ROBOT){
                     WriteInQueue(&q_messageToMon,message_response_robot);
-                    cout << "Send msg to mon OK "<< endl;
+                    //cout << "Send msg to mon OK "<< endl;
                 }
         }
     }
@@ -661,13 +662,13 @@ MessageState Tasks::Check_ComRobot(Message* message){
  */
 void Tasks::BatteryTask(void *arg) {
     
+    // Synchronization barrier (waiting that all tasks are starting)
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+    cout << "battery_synchronized" << endl;
     while(1){
         int rs;
 
         cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
-        // Synchronization barrier (waiting that all tasks are starting)
-        rt_sem_p(&sem_barrier, TM_INFINITE);
-        cout << "battery_synchronized" << endl;
 
         rt_sem_p(&sem_startRobot, TM_INFINITE);
             cout << "battery started" << endl;
