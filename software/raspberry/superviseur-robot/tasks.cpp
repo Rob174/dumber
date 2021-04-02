@@ -436,16 +436,20 @@ void Tasks::StartRobotTask(void *arg) {
             cout << msgSend->GetID();
             cout << ")" << endl;
 
-            //cout << "Movement answer: " << msgSend->ToString() << endl << flush;
+            cout << "Movement answer: " << msgSend->ToString() << endl << flush;
             WriteInQueue(&q_messageToMon, msgSend);  // msgSend will be deleted by sendToMon
-
+            cout << "jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj" << endl << flush;
             if (msgSend->GetID() == MESSAGE_ANSWER_ACK) {
+                cout << "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk" << endl << flush;
                 rt_queue_flush(&q_messageToRobot);
                 rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
                 robotStarted = 1;
+                cout << "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" << endl << flush;
                 rt_mutex_release(&mutex_robotStarted);
+                cout << "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh" << endl << flush;
                 rt_sem_v(&sem_reloadWD);
             }
+            
         } 
     }
 }
@@ -463,7 +467,7 @@ void Tasks::ReloadWD(void *arg) {
         rt_task_set_periodic(NULL, TM_NOW, time);
         RTIME now = rt_timer_read();
         int i=0;
-        while(i<10){
+        while(i<5){
             rt_task_wait_period(NULL);
             RTIME now2 = rt_timer_read();
             cout << "Periodic update WD time:"<< (now2-now)/1000000 <<endl<<flush;
@@ -630,8 +634,8 @@ MessageState Tasks::Check_ComRobot(Message* message){
             // Closing communication with the robot
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             cout << "DAZJIOOOOOOOOOOOOOOOOOOOZ"<< endl<<flush;
-            robot.Reset();
             rt_mutex_release(&mutex_robot);    
+            
             // Setting failcounter global variable to 0
   
             
