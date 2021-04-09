@@ -1,6 +1,7 @@
 # Dumber
 
 Depot du projet de temps reel 4eme année au departement GEI de l'INSA Toulouse.
+
 <b color="red">Le code est disponible dans la branche releasev2</b>
 
 <b color="red">N'ayant pas pu parvenir à faire fonctionner la fonctionnalité 6, nous l'avons laissée dans sa branche dédiée (Fonctionnalite6) :</b> [lien](https://github.com/Rob174/dumber/blob/Fonctionnalite6/software/raspberry/superviseur-robot/tasks.cpp)
