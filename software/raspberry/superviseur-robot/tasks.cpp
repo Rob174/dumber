@@ -73,6 +73,10 @@ void Tasks::Init() {
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    if (err = rt_mutex_create(&mutex_connected, NULL)) {
+        cerr << "Error mutex create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     cout << "Mutexes created successfully" << endl << flush;
 
     /**************************************************************************************/
@@ -196,22 +200,35 @@ void Tasks::ServerTask(void *arg) {
     cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
     // Synchronization barrier (waiting that all tasks are started)
     rt_sem_p(&sem_barrier, TM_INFINITE);
+    
+    while (1){
+        
+        rt_mutex_acquire(&mutex_connected, TM_INFINITE);
+        int connecte = monConnected;
+        rt_mutex_release(&mutex_connected);
+        if (connecte == 0) {
+            /**************************************************************************************/
+            /* The task server starts here                                                        */
+            /**************************************************************************************/
+            rt_mutex_acquire(&mutex_monitor, TM_INFINITE);
+            status = monitor.Open(SERVER_PORT);
+            rt_mutex_release(&mutex_monitor);
 
-    /**************************************************************************************/
-    /* The task server starts here                                                        */
-    /**************************************************************************************/
-    rt_mutex_acquire(&mutex_monitor, TM_INFINITE);
-    status = monitor.Open(SERVER_PORT);
-    rt_mutex_release(&mutex_monitor);
+            cout << "Open server on port " << (SERVER_PORT) << " (" << status << ")" << endl;
 
-    cout << "Open server on port " << (SERVER_PORT) << " (" << status << ")" << endl;
-
-    if (status < 0) throw std::runtime_error {
-        "Unable to start server on port " + std::to_string(SERVER_PORT)
-    };
-    monitor.AcceptClient(); // Wait the monitor client
-    cout << "Rock'n'Roll baby, client accepted!" << endl << flush;
-    rt_sem_broadcast(&sem_serverOk);
+            if (status < 0) throw std::runtime_error {
+                "Unable to start server on port " + std::to_string(SERVER_PORT)
+            };
+            monitor.AcceptClient(); // Wait the monitor client
+            cout << "Rock'n'Roll baby, client accepted!" << endl << flush;
+            
+            rt_mutex_acquire(&mutex_connected, TM_INFINITE);
+            monConnected = 1;
+            rt_mutex_release(&mutex_connected);
+            rt_sem_broadcast(&sem_serverOk);
+            cout << "OKKKKKKKKKKKKKKKKKKKKKKKKKKK" << endl << flush;
+        }
+    }
 }
 
 /**
@@ -248,66 +265,66 @@ void Tasks::ReceiveFromMonTask(void *arg) {
     cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
     // Synchronization barrier (waiting that all tasks are starting)
     rt_sem_p(&sem_barrier, TM_INFINITE);
-    
+    while (1) {
     /**************************************************************************************/
     /* The task receiveFromMon starts here                                                */
     /**************************************************************************************/
+    cout << "ok lancé" << endl << flush;
     rt_sem_p(&sem_serverOk, TM_INFINITE);
     cout << "Received message from monitor activated" << endl << flush;
 
-    while (1) {
-        msgRcv = monitor.Read();
-        cout << "Rcv <= " << msgRcv->ToString() << endl << flush;
+        rt_mutex_acquire(&mutex_connected, TM_INFINITE);
+        int connected = monConnected;
+        rt_mutex_release(&mutex_connected);
+        while (connected == 1){
+            msgRcv = monitor.Read();
+            cout << "Rcv <= " << msgRcv->ToString() << endl << flush;
 
-        if (msgRcv->CompareID(MESSAGE_MONITOR_LOST)) {
-            delete(msgRcv);
-            cout << "Monitor communcation lost";
-            // Stopper le mouvement du robot
-            rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
-            rs = robotStarted;
-            rt_mutex_release(&mutex_robotStarted);
-            if (rs == 1) {
-                rt_mutex_acquire(&mutex_move, TM_INFINITE);
-                cpMove = move;
-                rt_mutex_release(&mutex_move);
-
-                cout << " move: " << cpMove;
-
+            if (msgRcv->CompareID(MESSAGE_MONITOR_LOST)) {
+                robot.Write(new Message(MESSAGE_ROBOT_STOP));
                 rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-                robot.Stop();
+                robot.Close();
                 rt_mutex_release(&mutex_robot);
-            }
-            else {
-                exit(-1);
-            }
-            cout << endl << flush;
-            // Stopper com avec robot
-            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-            status = robot.Close();
-            rt_mutex_release(&mutex_robot);
-            // Stopper com avec le serveur
-            rt_mutex_acquire(&mutex_monitor, TM_INFINITE);
-            status = monitor.Close(SERVER_PORT);
-            rt_mutex_release(&mutex_monitor);
 
-            cout << "Closing server" << " (" << status << ")" << endl;
-            // Stopper caméra
-            exit(0);
-        } else if (msgRcv->CompareID(MESSAGE_ROBOT_COM_OPEN)) {
-            rt_sem_v(&sem_openComRobot);
-        } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD)) {
-            rt_sem_v(&sem_startRobot);
-        } else if (msgRcv->CompareID(MESSAGE_ROBOT_GO_FORWARD) ||
-                msgRcv->CompareID(MESSAGE_ROBOT_GO_BACKWARD) ||
-                msgRcv->CompareID(MESSAGE_ROBOT_GO_LEFT) ||
-                msgRcv->CompareID(MESSAGE_ROBOT_GO_RIGHT) ||
-                msgRcv->CompareID(MESSAGE_ROBOT_STOP)) {
+                rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+                robotStarted = 0;
+                rt_mutex_release(&mutex_robotStarted);
+                
+                monitor.Close();
 
-            rt_mutex_acquire(&mutex_move, TM_INFINITE);
-            move = msgRcv->GetID();
-            rt_mutex_release(&mutex_move);
+
+                cout << endl << flush;
+                
+                rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+                int status = robot.Close();
+                rt_mutex_release(&mutex_robot);
+                rt_mutex_acquire(&mutex_monitor, TM_INFINITE);
+                monitor.Close();
+                rt_mutex_release(&mutex_monitor);
+                rt_queue_flush(&q_messageToMon);
+                
+                rt_mutex_acquire(&mutex_connected, TM_INFINITE);
+                monConnected = 0;
+                rt_mutex_release(&mutex_connected);
+
+                cout << "Closing server" << " (" << status << ")" << endl;
+            } else if (msgRcv->CompareID(MESSAGE_ROBOT_COM_OPEN)) {
+                cout << "open communicaation robot" << endl << flush;
+                rt_sem_v(&sem_openComRobot);
+            } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD)) {
+                rt_sem_v(&sem_startRobot);
+            } else if (msgRcv->CompareID(MESSAGE_ROBOT_GO_FORWARD) ||
+                    msgRcv->CompareID(MESSAGE_ROBOT_GO_BACKWARD) ||
+                    msgRcv->CompareID(MESSAGE_ROBOT_GO_LEFT) ||
+                    msgRcv->CompareID(MESSAGE_ROBOT_GO_RIGHT) ||
+                    msgRcv->CompareID(MESSAGE_ROBOT_STOP)) {
+
+                rt_mutex_acquire(&mutex_move, TM_INFINITE);
+                move = msgRcv->GetID();
+                rt_mutex_release(&mutex_move);
+            }
+            delete(msgRcv); // mus be deleted manually, no consumer
         }
-        delete(msgRcv); // mus be deleted manually, no consumer
     }
 }
 
@@ -336,11 +353,15 @@ void Tasks::OpenComRobot(void *arg) {
 
         Message * msgSend;
         if (status < 0) {
+            cout << "Robot open com : MESSAGE_ANSWER_NACK" << endl << flush;
             msgSend = new Message(MESSAGE_ANSWER_NACK);
         } else {
+            cout << "Robot open com : MESSAGE_ANSWER_ACK" << endl << flush;
             msgSend = new Message(MESSAGE_ANSWER_ACK);
         }
+        cout << "ttttttttttttttttttt" << flush <<endl;
         WriteInQueue(&q_messageToMon, msgSend); // msgSend will be deleted by sendToMon
+        cout << "aaaaaaaaaaaaaaaaa" << flush <<endl;
     }
 }
 
@@ -365,9 +386,14 @@ void Tasks::StartRobotTask(void *arg) {
         rt_mutex_release(&mutex_robot);
         cout << msgSend->GetID();
         cout << ")" << endl;
-
-        cout << "Movement answer: " << msgSend->ToString() << endl << flush;
-        WriteInQueue(&q_messageToMon, msgSend);  // msgSend will be deleted by sendToMon
+        
+        rt_mutex_acquire(&mutex_connected, TM_INFINITE);
+        int connected = monConnected;
+        rt_mutex_release(&mutex_connected);
+        if(connected == 1) {//Si la connexion avec le moniteur a été perdue il ne faut pas surcharger la queue
+            cout << "Movement answer: " << msgSend->ToString() << endl << flush;
+            WriteInQueue(&q_messageToMon, msgSend);  // msgSend will be deleted by sendToMon
+        }
 
         if (msgSend->GetID() == MESSAGE_ANSWER_ACK) {
             rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
@@ -395,11 +421,11 @@ void Tasks::MoveTask(void *arg) {
 
     while (1) {
         rt_task_wait_period(NULL);
-        cout << "Periodic movement update";
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         rs = robotStarted;
         rt_mutex_release(&mutex_robotStarted);
         if (rs == 1) {
+            cout << "Periodic movement update" << endl << flush;
             rt_mutex_acquire(&mutex_move, TM_INFINITE);
             cpMove = move;
             rt_mutex_release(&mutex_move);
